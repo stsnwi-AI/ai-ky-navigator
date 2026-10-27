@@ -1,0 +1,11 @@
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+const root=new URL('./',import.meta.url);
+const output=new URL('handoff/',root);
+await mkdir(output,{recursive:true});
+const html=await readFile(new URL('index.html',root),'utf8');
+const css=await readFile(new URL('style.css',root),'utf8');
+const js=await readFile(new URL('app.js',root),'utf8');
+const standalone=html.replace(/<link rel="stylesheet" href="[^"]+">/,()=>`<style>${css}</style>`).replace(/<script defer src="[^"]+"><\/script>/,()=>`<script>${js.replace(/<\/script/gi,'<\\/script')}</script>`);
+if(/(?:href="style\.css|src="app\.js)/.test(standalone))throw new Error('External asset remains');
+await writeFile(new URL('AI-KY-Navigator-v0.6.html',output),standalone);
+console.log('handoff/AI-KY-Navigator-v0.6.html');
