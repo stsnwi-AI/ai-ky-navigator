@@ -62,7 +62,7 @@ class VoicevoxPlayer {
   async speak({endpoint,text,speaker,style='friendly'}){
     this.stop();
     const url=String(endpoint||'').replace(/\/$/,'');
-    if(!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url))throw new Error('HTTPSかローカルのVOICEVOXアドレスを指定してください。');
+    if(url!=='/voicevox'&&!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url))throw new Error('HTTPSかローカルのVOICEVOXアドレスを指定してください。');
     if(!text.trim())return;
     const controller=new AbortController();this.controller=controller;
     const params=new URLSearchParams({text,speaker:String(speaker)});
@@ -84,7 +84,7 @@ class VoicevoxPlayer {
 }
 async function fetchSpeakers(endpoint){
   const url=String(endpoint||'').replace(/\/$/,'');
-  if(!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url))throw new Error('HTTPSかローカルのVOICEVOXアドレスを指定してください。');
+  if(url!=='/voicevox'&&!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url))throw new Error('HTTPSかローカルのVOICEVOXアドレスを指定してください。');
   const r=await fetch(`${url}/speakers`,{signal:AbortSignal.timeout(8000)});
   if(!r.ok)throw new Error(`音声一覧を取得できません (${r.status})`);
   const list=await r.json();
@@ -101,6 +101,7 @@ function persist(){
   const ok=saveDraft(storage,{state,count:$('count').value,work:$('work').value,answer:$('answer').value});
   $('save-status').textContent=ok?'入力内容をこのブラウザに自動保存しました。再読み込み後も続けられます。':'このブラウザでは自動保存できません。再読み込みや終了をすると入力内容が失われます。';
 }
+if(['localhost','127.0.0.1'].includes(window.location.hostname) && window.location.port==='3000') $('voice-endpoint').value='/voicevox';
 const voicePlayer=new VoicevoxPlayer({status:message=>{$('speech-status').textContent=message;}});
 function voiceStatus(){
   const v=$('voice').selectedOptions[0];
