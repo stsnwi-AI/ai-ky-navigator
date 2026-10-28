@@ -1,4 +1,5 @@
 import {createActivity,advance,prompt,saveDraft,loadDraft} from './flow.js';
+import {VoicevoxPlayer,fetchSpeakers} from './voicevox.js';
 
 const $=id=>document.getElementById(id);
 let state=null,voices=[],utterance=null;
@@ -9,29 +10,24 @@ function persist(){
   const ok=saveDraft(storage,{state,count:$('count').value,work:$('work').value,answer:$('answer').value});
   $('save-status').textContent=ok?'入力内容をこのブラウザに自動保存しました。再読み込み後も続けられます。':'このブラウザでは自動保存できません。再読み込みや終了をすると入力内容が失われます。';
 }
-let synth;try{synth=window.speechSynthesis;}catch{}
-// Voice metadata has no standardized gender field. Prefer known voice names, never pitch-shift a voice to fake gender.
-const names={female:/(nanami|haruka|ayumi|sayaka|kyoko|o-ren|shiori|mizuki|ななみ|はるか|female|woman|女性)/i,male:/(keita|ichiro|takumi|otoya|けいた|いちろう|male|man|男性)/i};
-function selectedVoice(){
-  if($('voice').value!=='auto')return voices.find(v=>v.voiceURI===$('voice').value);
-  const candidates=voices.filter(v=>names[$('gender').value].test(v.name));
-  return candidates.find(v=>v.localService)||candidates[0];
-}
+const voicePlayer=new VoicevoxPlayer({status:message=>{$('speech-status').textContent=message;}});
 function voiceStatus(){
-  const v=selectedVoice();
-  const status=!synth?'このブラウザは音声読み上げに対応していません。':!voices.length?'日本語音声が見つかりません。端末の音声設定をご確認ください。':!v?'選択した性別と判別できる声がありません。音声一覧から手動で選択してください。':`使用音声：${v.name}（${v.localService?'端末内':'ブラウザ提供の音声'}）。声の性別は端末によって異なります。`;
-  $('voice-status').textContent=status;
-  for(const id of ['speak','replay'])$(id).disabled=!synth||!v;
+  const v=$('voice').selectedOptions[0];
+  $('voice-status').textContent=v&&$('voice').value?`VOICEVOXの音声：${v.textContent}。男性・女性は実際の声を聴いて選択してください。`:'VOICEVOXエンジンに接続し、音声一覧を取得してください。';
+  $('speak').disabled=!$('voice').value;
+  $('replay').disabled=!$('voice').value;
 }
-function loadVoices(){
-  const prior=$('voice').value;
-  voices=synth?synth.getVoices().filter(v=>/^ja(?:[-_]|$)/i.test(v.lang)):[];
-  $('voice').replaceChildren(new Option('性別から自動選択','auto'));
-  voices.forEach(v=>$('voice').add(new Option(`${v.name} ${v.localService?'（端末内）':'（ブラウザ）'}`,v.voiceURI)));
-  if(voices.some(v=>v.voiceURI===prior))$('voice').value=prior;
-  voiceStatus();
+async function loadVoices(){
+  stop(); $('voice-status').textContent='VOICEVOXエンジンへ接続中…';
+  try{
+    const list=await fetchSpeakers($('voice-endpoint').value.trim());
+    $('voice').replaceChildren(new Option('音声を選択してください',''));
+    list.forEach(v=>$('voice').add(new Option(v.label,String(v.id))));
+    $('voice-status').textContent=`${list.length}種類の音声が見つかりました。男女・話し方を聴き比べて選択してください。`;
+    voiceStatus();
+  }catch(err){$('voice').replaceChildren(new Option('エンジン未接続',''));voiceStatus();$('voice-status').textContent=`接続できません：${err.message}。VOICEVOXの起動とCORS設定を確認してください。`;}
 }
-function stop(){if(synth)synth.cancel();utterance=null;$('speech-status').textContent='読み上げ停止中';}
+function stop(){voicePlayer.stop();$('speech-status').textContent='読み上げ停止中';}
 // A less scripted, conversational delivery. Only the narration changes; written KY records remain untouched.
 function naturalPrompt(){
   if(!state)return '本日の作業内容と、人数を教えてください。';
@@ -44,17 +40,10 @@ function naturalPrompt(){
   if(state.phase==='confirm')return `今日の重点安全目標は、${state.goal}。この内容でよろしいですか？`;
   return '皆さん、ありがとうございました。今日も一日、ご安全に。';
 }
-function speak(){
-  stop();const v=selectedVoice();if(!v||!synth)return;
-  const u=new SpeechSynthesisUtterance(naturalPrompt());utterance=u;
-  u.voice=v;u.lang='ja-JP';
-  // Exaggerated pitch made each voice sound synthetic and often disguised gender differences.
-  u.rate=$('style').value==='bright'?1.04:0.92;
-  u.pitch=1.0;u.volume=1;
-  u.onstart=()=>{$('speech-status').textContent='読み上げ中';};
-  u.onend=()=>{if(utterance===u)$('speech-status').textContent='読み上げ完了';};
-  u.onerror=e=>{if(utterance===u)$('speech-status').textContent=`読み上げに失敗しました（${e.error}）。別の声を選ぶか、文字で進めてください。`;};
-  synth.speak(u);
+async function speak(){
+  if(!$('voice').value)return;
+  try{await voicePlayer.speak({endpoint:$('voice-endpoint').value.trim(),text:naturalPrompt(),speaker:Number($('voice').value),style:$('style').value});}
+  catch(err){if(err.name!=='AbortError')$('speech-status').textContent=`外部音声の生成に失敗：${err.message}。エンジンの起動・接続設定をご確認ください。`;}
 }
 // SpeechRecognition is optional and may use browser-provider cloud processing.
 const SpeechRecognizer=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -122,9 +111,10 @@ $('answer-form').addEventListener('submit',e=>{e.preventDefault();try{state=adva
 $('reset').onclick=()=>{micStop();if(!confirm('回答と進行状況を消去して最初からやり直しますか？ 作業内容と人数は残ります。'))return;stop();state=null;$('answer').value='';$('session').hidden=true;$('setup').hidden=false;$('error').textContent='';persist();$('count').focus();};
 $('clear-draft').onclick=()=>{micStop();if(!confirm('このブラウザに保存した作業内容・人数・すべての回答を消去しますか？'))return;stop();state=null;$('count').value='3';$('work').value='';$('answer').value='';$('session').hidden=true;$('setup').hidden=false;$('error').textContent='';persist();$('work').focus();};
 for(const id of ['count','work','answer'])$(id).addEventListener('input',persist);
-$('gender').onchange=()=>{stop();$('voice').value='auto';voiceStatus();};$('voice').onchange=()=>{stop();voiceStatus();};$('style').onchange=stop;
+$('gender').onchange=()=>{stop();voiceStatus();};$('voice').onchange=()=>{stop();voiceStatus();};$('style').onchange=stop;
+$('voice-connect').onclick=loadVoices;
 $('speak').onclick=speak;$('replay').onclick=speak;$('stop').onclick=stop;
-try{if(synth)synth.addEventListener('voiceschanged',loadVoices);loadVoices();}catch{$('voice-status').textContent='音声機能を初期化できません。テキストで進行できます。';}
+voiceStatus();
 window.addEventListener('pagehide',()=>{stop();micStop();});
 const restored=loadDraft(storage);
 if(restored.draft){const d=restored.draft;$('count').value=d.count;$('work').value=d.work;state=d.state;if(state)render();$('answer').value=d.answer;$('save-status').textContent='保存していた入力内容を復元しました。';}
