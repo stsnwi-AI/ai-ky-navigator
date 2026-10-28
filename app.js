@@ -211,6 +211,23 @@ const localMode=window.location.hostname==='127.0.0.1' && window.location.port==
 const modeHint=$('voice-mode-hint');
 if(modeHint) modeHint.textContent=localMode?'✅ Windows簡単起動版です。VOICEVOXへ自動接続します。':'ℹ️ オンライン版です。自然音声はWindows簡単起動版で利用できます。';
 if(localMode) loadVoices();
+$('voice-check').onclick=async()=>{
+  const result=$('voice-check-result');
+  result.textContent='接続状態を確認しています…';
+  const local=location.hostname==='127.0.0.1'&&location.port==='3000';
+  if(!local){
+    result.textContent='オンライン版のため、Windows内のVOICEVOX音声は利用できません。KY活動の入力機能は利用できます。これはVOICEVOXの故障ではありません。';
+    return;
+  }
+  try{
+    const speakers=await fetchSpeakers('/voicevox');
+    if(!speakers.length)throw new Error('利用可能な声がありません');
+    result.textContent='VOICEVOXとの通信に成功しました。'+speakers.length+'種類の音声を確認しました。声を選んで「読み上げ開始」をお試しください。';
+    if(!$('voice').value)await loadVoices();
+  }catch(error){
+    result.textContent='VOICEVOXの音声が利用できません。VOICEVOXを起動してください。詳細：'+error.message;
+  }
+};
 window.addEventListener('pagehide',()=>{stop();micStop();});
 const restored=loadDraft(storage);
 if(restored.draft){const d=restored.draft;$('count').value=d.count;$('work').value=d.work;state=d.state;if(state)render();$('answer').value=d.answer;$('save-status').textContent='保存していた入力内容を復元しました。';}
