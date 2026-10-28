@@ -71,9 +71,7 @@ try {
       }
     } catch {
       Write-Host ('通信エラー: '+$_.Exception.Message) -ForegroundColor Yellow
-      if (-not $response.HeadersWritten) {
-        try { $response.StatusCode=502 } catch {}
-      }
+      try { $response.StatusCode=502 } catch {}
     } finally {
       try {$response.OutputStream.Close()} catch {}
     }
