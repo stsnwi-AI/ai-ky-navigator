@@ -10,16 +10,52 @@ function persist(){
   $('save-status').textContent=ok?'入力内容をこのブラウザに自動保存しました。再読み込み後も続けられます。':'このブラウザでは自動保存できません。再読み込みや終了をすると入力内容が失われます。';
 }
 let synth;try{synth=window.speechSynthesis;}catch{}
-const names={female:/(nanami|haruka|ayumi|sayaka|kyoko|o-ren|shiori|mizuki|ななみ|はるか)/i,male:/(keita|ichiro|takumi|otoya|けいた|いちろう)/i};
-function selectedVoice(){return $('voice').value==='auto'?voices.find(v=>names[$('gender').value].test(v.name)):voices.find(v=>v.voiceURI===$('voice').value);}
+// Voice metadata has no standardized gender field. Prefer known voice names, never pitch-shift a voice to fake gender.
+const names={female:/(nanami|haruka|ayumi|sayaka|kyoko|o-ren|shiori|mizuki|ななみ|はるか|female|woman|女性)/i,male:/(keita|ichiro|takumi|otoya|けいた|いちろう|male|man|男性)/i};
+function selectedVoice(){
+  if($('voice').value!=='auto')return voices.find(v=>v.voiceURI===$('voice').value);
+  const candidates=voices.filter(v=>names[$('gender').value].test(v.name));
+  return candidates.find(v=>v.localService)||candidates[0];
+}
 function voiceStatus(){
   const v=selectedVoice();
-  $('voice-status').textContent=!synth?'このブラウザは音声読み上げに対応していません。':!voices.length?'この端末では日本語音声を利用できません。端末の日本語音声設定を確認してください。':!v?'選択した性別に一致すると判別できる日本語音声がありません。日本語音声を手動選択できます。':`使用音声：${v.name}${v.localService?'（端末音声）':'（端末外の音声サービスのため、この試作版では使用しません）'}`;
-  for(const id of ['speak','replay']) $(id).disabled=!v||!v.localService;
+  const status=!synth?'このブラウザは音声読み上げに対応していません。':!voices.length?'日本語音声が見つかりません。端末の音声設定をご確認ください。':!v?'選択した性別と判別できる声がありません。音声一覧から手動で選択してください。':`使用音声：${v.name}（${v.localService?'端末内':'ブラウザ提供の音声'}）。声の性別は端末によって異なります。`;
+  $('voice-status').textContent=status;
+  for(const id of ['speak','replay'])$(id).disabled=!synth||!v;
 }
-function loadVoices(){const prior=$('voice').value;voices=synth?synth.getVoices().filter(v=>/^ja(?:[-_]|$)/i.test(v.lang)):[];$('voice').replaceChildren(new Option('性別から自動選択','auto'));voices.forEach(v=>$('voice').add(new Option(v.name,v.voiceURI)));if(voices.some(v=>v.voiceURI===prior)) $('voice').value=prior;voiceStatus();}
+function loadVoices(){
+  const prior=$('voice').value;
+  voices=synth?synth.getVoices().filter(v=>/^ja(?:[-_]|$)/i.test(v.lang)):[];
+  $('voice').replaceChildren(new Option('性別から自動選択','auto'));
+  voices.forEach(v=>$('voice').add(new Option(`${v.name} ${v.localService?'（端末内）':'（ブラウザ）'}`,v.voiceURI)));
+  if(voices.some(v=>v.voiceURI===prior))$('voice').value=prior;
+  voiceStatus();
+}
 function stop(){if(synth)synth.cancel();utterance=null;$('speech-status').textContent='読み上げ停止中';}
-function speak(){stop();const v=selectedVoice();if(!v||!v.localService)return;utterance=new SpeechSynthesisUtterance(state?prompt(state):'作業人数と本日の作業内容を入力してください。');utterance.voice=v;utterance.lang='ja-JP';utterance.rate=$('style').value==='bright'?1.12:0.95;utterance.pitch=$('style').value==='bright'?1.12:1.03;const u=utterance;u.onstart=()=>{$('speech-status').textContent='読み上げ中';};u.onend=()=>{if(utterance===u)$('speech-status').textContent='読み上げ完了';};u.onerror=e=>{if(utterance===u)$('speech-status').textContent=`読み上げを完了できませんでした（${e.error}）。テキストで進行できます。`;};synth.speak(u);}
+// A less scripted, conversational delivery. Only the narration changes; written KY records remain untouched.
+function naturalPrompt(){
+  if(!state)return '本日の作業内容と、人数を教えてください。';
+  const who=`${state.index+1}人目の方`;
+  const casual=$('style').value==='friendly';
+  if(state.phase==='danger')return casual?`${who}。今日の作業で、どんな危険がありそうですか？`:`${who}、危険だと思うことを教えてください。`;
+  if(state.phase==='measure')return casual?`ありがとうございます。では、その危険を防ぐには、どうしたらいいでしょうか？`:`ありがとうございます。その危険への対策をお願いします。`;
+  if(state.phase==='ack')return casual?'ありがとうございます。では、次に進みましょう。':'ありがとうございます。次の方、お願いします。';
+  if(state.phase==='goal')return '皆さん、ありがとうございます。最後に、今日の重点安全目標を決めましょう。';
+  if(state.phase==='confirm')return `今日の重点安全目標は、${state.goal}。この内容でよろしいですか？`;
+  return '皆さん、ありがとうございました。今日も一日、ご安全に。';
+}
+function speak(){
+  stop();const v=selectedVoice();if(!v||!synth)return;
+  const u=new SpeechSynthesisUtterance(naturalPrompt());utterance=u;
+  u.voice=v;u.lang='ja-JP';
+  // Exaggerated pitch made each voice sound synthetic and often disguised gender differences.
+  u.rate=$('style').value==='bright'?1.04:0.92;
+  u.pitch=1.0;u.volume=1;
+  u.onstart=()=>{$('speech-status').textContent='読み上げ中';};
+  u.onend=()=>{if(utterance===u)$('speech-status').textContent='読み上げ完了';};
+  u.onerror=e=>{if(utterance===u)$('speech-status').textContent=`読み上げに失敗しました（${e.error}）。別の声を選ぶか、文字で進めてください。`;};
+  synth.speak(u);
+}
 // SpeechRecognition is optional and may use browser-provider cloud processing.
 const SpeechRecognizer=window.SpeechRecognition||window.webkitSpeechRecognition;
 function micMessage(message){$('mic-status').textContent=message;}
@@ -96,4 +132,3 @@ else if(restored.error)$('save-status').textContent='保存内容を復元でき
 $('start').disabled=false;
 $('boot-status').textContent='起動完了：入力して開始できます。';
 window.kyReady=true;
-
