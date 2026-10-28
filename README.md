@@ -1,3 +1,17 @@
+
+## Ver.0.8.2 WindowsでVOICEVOXを使う方法（CORS回避）
+
+GitHub PagesのHTTPSページからPC内のVOICEVOX (HTTP) への通信がブラウザに遮断される場合があります。Windowsローカル版はNode.js 20以降を使って同一オリジンで中継するため、この問題を回避します。
+
+1. Windows PCでVOICEVOXを起動したままにする。 http://127.0.0.1:50021/docs が開くことを確認。
+2. GitHubのCode → Download ZIPでリポジトリ全体をダウンロードし、ZIPを展開する。
+3. Node.js 20以降（LTS推奨）をインストールする。
+4. 展開フォルダー内の Windows-KY-Start.bat をダブルクリックする。
+5. http://127.0.0.1:3000 を開く。音声接続先は /voicevox が自動選択される。
+6. 「VOICEVOXに接続・話者一覧を取得」を押す。
+
+**セキュリティ:** このローカルHTTPサーバーは127.0.0.1のみで待ち受けます。スマホや社外ネットワークから接続できる構成ではありません。VOICEVOX APIには許可した3経路だけを転送します。GitHub Pagesを開いた場合はブラウザのローカル通信制約が残ります。
+
 # Ver.0.8.0: 外部音声エンジン接続試作
 
 標準 `speechSynthesis` の声は不採用。VOICEVOX ENGINE の `/speakers` `/audio_query` `/synthesis` を使って、話者ごとに本物の別音声WAVを生成・再生します。外部エンジンが使えない場合は合成音声へ自動で戻りません（文字で活動を続行）。エンジン音声データや他者の録音・キャラクター素材は同梱していません。
