@@ -207,6 +207,10 @@ $('gender').onchange=()=>{stop();voiceStatus();};$('voice').onchange=()=>{stop()
 $('voice-connect').onclick=loadVoices;
 $('speak').onclick=speak;$('replay').onclick=speak;$('stop').onclick=stop;
 voiceStatus();
+const localMode=window.location.hostname==='127.0.0.1' && window.location.port==='3000';
+const modeHint=$('voice-mode-hint');
+if(modeHint) modeHint.textContent=localMode?'✅ Windows簡単起動版です。VOICEVOXへ自動接続します。':'ℹ️ オンライン版です。自然音声はWindows簡単起動版で利用できます。';
+if(localMode) loadVoices();
 window.addEventListener('pagehide',()=>{stop();micStop();});
 const restored=loadDraft(storage);
 if(restored.draft){const d=restored.draft;$('count').value=d.count;$('work').value=d.work;state=d.state;if(state)render();$('answer').value=d.answer;$('save-status').textContent='保存していた入力内容を復元しました。';}
