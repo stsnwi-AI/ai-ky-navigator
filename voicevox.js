@@ -5,7 +5,7 @@ export class VoicevoxPlayer {
   async speak({endpoint,text,speaker,style='friendly'}){
     this.stop();
     const url=String(endpoint||'').replace(/\/$/,'');
-    if(!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url))throw new Error('HTTPSかローカルのVOICEVOXアドレスを指定してください。');
+    if(url!=='/voicevox'&&!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url))throw new Error('HTTPSかローカルのVOICEVOXアドレスを指定してください。');
     if(!text.trim())return;
     const controller=new AbortController();this.controller=controller;
     const params=new URLSearchParams({text,speaker:String(speaker)});
@@ -27,7 +27,7 @@ export class VoicevoxPlayer {
 }
 export async function fetchSpeakers(endpoint){
   const url=String(endpoint||'').replace(/\/$/,'');
-  if(!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url))throw new Error('HTTPSかローカルのVOICEVOXアドレスを指定してください。');
+  if(url!=='/voicevox'&&!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url))throw new Error('HTTPSかローカルのVOICEVOXアドレスを指定してください。');
   const r=await fetch(`${url}/speakers`,{signal:AbortSignal.timeout(8000)});
   if(!r.ok)throw new Error(`音声一覧を取得できません (${r.status})`);
   const list=await r.json();
